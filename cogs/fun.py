@@ -13,8 +13,36 @@ class Fun(commands.Cog):
         await ctx.send(f'<@{ctx.author.id}> You got **{result}**!')
 
 
-
-
+    @commands.command(aliases=["chooserandom", "choose", "pickfrom", "pickrandom", "pick"])
+    async def choosefrom(self, ctx, num="1", *items):
+        """Picks however many random things you choose from a list you provide.
+        .choosefrom 1 spaghetti meatballs taco -> "spaghetti"
+        .pickrandom 2 red, green, blue, orange, yellow -> "green, blue"
+        .pickfrom happy sad angry -> "happy"
+        """
+        items = list(items)
+        if not num.isdigit():
+            items.append(num)
+            num = "1"
+        sanitizeditems = []
+        for x in items:
+            if x[-1] == ',':
+                x = x[:-1]
+            sanitizeditems.append(x)
+        items = sanitizeditems
+        num = int(num)
+        if num == 0:
+            await ctx.send(f'<@{ctx.author.id}> Have you ever tried dividing by 0? This is a lot like that.'
+                           f' I can only choose one or more, silly! <:StarGiggle:445043444805795860>')
+        elif num > len(sanitizeditems):
+            await ctx.send(f'<@{ctx.author.id}> Whoa there! <:MeruSweat:633659030702784513>'
+                           f' Getting a little excited, are we? <:HeadPats:586700086059466752> If you want me to choose'
+                           f' that many things, you\'ll need to *give* me at least that many things to choose *from*!'
+                           f'<:MeruHehHeh:633650580711014400>')
+        else:
+            items = random.sample(items, num)
+            output = ", and ".join(items)
+            await ctx.send(f'<@{ctx.author.id}> Hmm... I choose **{output}**!')
 
     # @commands.command(aliases=["dice"])
     # async def roll1(self, ctx, *args):

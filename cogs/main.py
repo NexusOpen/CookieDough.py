@@ -54,8 +54,8 @@ class Main(commands.Cog):
         if ctx.command is not None:
             command_info = self.get_command_info(ctx)
             log.info(f'{ctx.author} attempted to use [{command_info}] but failed with {error} ')
-            reply = await ctx.send(f'{type(error).__name__}: {error}')
-            await reply.delete(delay=1)
+            # reply = await ctx.send(f'{type(error).__name__}: {error}')
+            # await reply.delete(delay=1)
             raise error
 
     @commands.command()
@@ -67,11 +67,6 @@ class Main(commands.Cog):
     @commands.has_permissions(manage_guild=True)
     async def reload(self, ctx, *args):
         """Reload extension(s)"""
-        # Hardcode for Nat - no longer necessary
-        # if not ctx.message.author.permissions_in(ctx.message.channel).administrator:
-        #     if not ctx.message.author.id == 235482330335019008:
-        #         await ctx.channel.send(f"That command is for grown-ups, silly!")
-        #         return
         if len(args) == 0:
             args = list(self.bot.extensions.keys())
 
