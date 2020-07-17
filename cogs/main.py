@@ -69,11 +69,12 @@ class Main(commands.Cog):
         """Reload extension(s)"""
         if len(args) == 0:
             args = list(self.bot.extensions.keys())
-
+        else:
+            args = set(args)
         reloaded = []
         failed = []
 
-        for name in set(args):
+        for name in args:
             try:
                 ctx.bot.reload_extension(name)
                 reloaded.append(name)

@@ -17,8 +17,8 @@ class Database(commands.Cog):
         return database_path
 
     #adds database path to file if path isn't already present
-    def getfile(self, ctx, file):
-        database_path = self.findguild(ctx)
+    def getfile(self, ctx, file, finduser=False):
+        database_path = self.findguild(ctx, finduser)
         if not database_path in file:
             file = database_path + file
         if not file_extension in file:
@@ -48,8 +48,8 @@ class Database(commands.Cog):
                 return output
         return None
 
-    def writefile(self, ctx, file, data=None):
-        file = self.getfile(ctx, file)
+    def writefile(self, ctx, file, data=None, user=False):
+        file = self.getfile(ctx, file, user)
         if data is None:
             return
         with open(file, "w") as write_file:
@@ -143,10 +143,45 @@ class Database(commands.Cog):
 
     @commands.command()
     @commands.has_permissions(administrator=True)
-    async def editattr(self, ctx, user: discord.Member=None, attr=None, *args):
-        file = self.getfile(ctx, user.id, True)
+    async def editatt(self, ctx, user: discord.Member=None, attr=None, args=""):
+        if user is None:
+            user = ctx.author
+        if attr is None:
+            if ctx.command.name == "editattr":
+                await ctx.send(f'<@{ctx.author.id}> Error: No attribute specified.')
+                return
+            return None
+        file = self.getfile(ctx, str(user.id), True)
         output = self.readfile(ctx, file)
-        
+
+        output[attr] = args
+        self.writefile(ctx, file, output, True)
+        if ctx.command.name == "editattr":
+            await ctx.send(f'<@{ctx.author.id}> {attr} successfully set to {args}')
+        # finally:
+        #     if True or ctx.command.name == "editattr":
+        #         await ctx.send(f'<@{ctx.author.id}> Error: {attr} cannot be set to {args}')
+        #         return
+        return
+
+    @commands.command()
+    @commands.has_permissions(administrator=True)
+    async def getatt(self, ctx, user: discord.Member = None, attr=None, *args):
+        if user is None:
+            user = ctx.author
+        if attr is None:
+            if ctx.command.name == "editattr":
+                await ctx.send(f'<@{ctx.author.id}> Error: No attribute specified.')
+                return
+            return None
+        file = self.getfile(ctx, str(user.id), True)
+        output = self.readfile(ctx, file)
+        if attr in output:
+            if ctx.command.name == "getattr":
+                await ctx.send(f'<@{ctx.author.id}> {output[attr]}')
+            else:
+                return output[attr]
+
     @commands.command()
     @commands.has_permissions(administrator=True)
     async def serverinit(self, ctx):
