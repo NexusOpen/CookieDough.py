@@ -1,5 +1,6 @@
 import logging
 from discord import Member
+from discord import User
 from discord.ext import commands
 import aiohttp
 import asyncio
@@ -12,6 +13,10 @@ log = logging.getLogger("cogs.testing")
 class Testing(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+    @commands.command(aliases=["getuseravatar", "avatar"])
+    async def getuserpic(self, ctx, user: User=None):
+        await ctx.send(f'{ctx.author.mention} {user.avatar_url}')
 
     @commands.command(aliases=["testcommandwrite"])
     async def testjsonwrite(self, ctx):
