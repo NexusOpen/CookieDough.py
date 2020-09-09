@@ -1,20 +1,26 @@
 import os
 import discord
-import sqlite3
+import random
+import sqlalchemy
 from databases import Database
 from discord.ext import commands
 
 
-class Database(commands.Cog):
+class Econ(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
+    # freshly generate data for a new server
     @commands.command()
     async def generateserverdata(self, ctx):
         server = ctx.message.guild.id
+        # currently, the bot uses "testdb" as its database. IDK if it would be better to generate a new database per
+        # server, or if it would make more sense to just have one bigass file but... for now it's just a testing thing
         database = Database('sqlite:///testdb.db')
         await database.connect()
-        query = """CREATE TABLE IF NOT EXISTS """ + str(server) + """_users (
+        # currently using raw queries in string form. maybe switch to using sqlalchemy?
+        # creating the user table for the server - holds various info specific to each user like wallet etc.
+        query = """CREATE TABLE IF NOT EXISTS '""" + str(server) + """_users' (
         user INTEGER PRIMARY KEY,
         wallet INTEGER,
         inventory TEXT,
@@ -24,19 +30,44 @@ class Database(commands.Cog):
         # Just an idea for the shop, allow for certain items having a limit you can have at once,
         # and others having a limit for the number a user can ever purchase. I.E. "upgrade to Gold rank" can't be
         # purchased more than once, because it's a one-time upgrade.
-        query = f"CREATE TABLE IF NOT EXISTS {server}_shop (name TEXT PRIMARY KEY, description TEXT, price INTEGER," \
+        # table for the shop stuff, obvs.
+        query = f"CREATE TABLE IF NOT EXISTS '{server}_shop' (name TEXT PRIMARY KEY, description TEXT, price INTEGER," \
                 f"heldlimit INTEGER, purchaselimit INTEGER)"
         await database.execute(query=query)
         userlist = ctx.message.guild.members
         values = []
         for user in userlist:
-            values.append({"user": user.id, "wallet": 0, "inventory": "{}", "continence": "false"})
-        query = f"INSERT INTO {server}_users(user, wallet, inventory, continence) " \
+            values.append({"user": user.id, "wallet": 0, "inventory": "{}", "continence": False})
+        query = f"INSERT INTO '{server}_users'(user, wallet, inventory, continence) " \
                 f"VALUES (:user, :wallet, :inventory, :continence)"
         await database.execute_many(query=query, values=values)
         await database.disconnect()
         await ctx.send("success!")
 
+    # completely reset server data
+    @commands.command()
+    async def serverwipe(self, ctx):
+        await ctx.send("Are you sure you want to wipe the server's data from my memory? This action cannot be undone.")
+        usertable = str(ctx.message.guild.id) + "_users"
+        shoptable = str(ctx.message.guild.id) + "_shop"
+        def check(m):
+            return m.channel == ctx.message.channel and m.author == ctx.message.author and m.content.lower() in ('yes', 'no')
+        confirmation = await self.bot.wait_for('message', timeout=60.0, check=check)
+        if confirmation.content.lower() == 'yes':
+            await ctx.send("got it, wiping everything.")
+            database = Database('sqlite:///testdb.db')
+            await database.connect()
+            query = f"DROP TABLE IF EXISTS '{usertable}'"
+            await database.execute(query=query)
+            query = f"DROP TABLE IF EXISTS '{shoptable}'"
+            await database.execute(query=query)
+            await database.disconnect()
+            await ctx.send("server deleted. use .generateserverdata to set things up again")
+        elif confirmation.content.lower() == 'no':
+            await ctx.send("Phew! That was a close one, huh?")
+
+    # mostly a testing command though we may be able to do stuff with it in the future.
+    # grabs the requested user's information from the user table for the server.
     @commands.command()
     async def getuserdata(self, ctx, user: discord.Member = None):
         server = ctx.message.guild.id
@@ -45,10 +76,113 @@ class Database(commands.Cog):
         user = user.id
         database = Database('sqlite:///testdb.db')
         await database.connect()
-        query = f"SELECT * FROM {server}_users WHERE user = {user}"
+        query = f"SELECT * FROM '{server}_users' WHERE user = {user}"
         result = await database.fetch_one(query=query)
         await ctx.send(result)
         await database.disconnect()
+
+    # mostly a testing command.
+    # lists all of the users who are continent.
+    @commands.command()
+    async def getcontlist(self, ctx, continent="false"):
+        if continent == "true" or continent == "True" or continent == "continent":
+            continent = True
+        else:
+            continent = False
+        server = ctx.message.guild.id
+        database = Database('sqlite:///testdb.db')
+        await database.connect()
+        query = f"SELECT * FROM '{server}_users' WHERE continence = {continent}"
+        result = await database.fetch_all(query=query)
+        await ctx.send(result)
+        await database.disconnect()
+
+    # takes a specified user and attribute (ex. wallet) and returns and/or says that value.
+    @commands.command()
+    async def getuserattr(self, ctx, att, user: discord.Member = None):
+        if user is None:
+            user = ctx.author
+        userid = user.id
+        server = ctx.message.guild.id
+        database = Database('sqlite:///testdb.db')
+        await database.connect()
+        query = f"SELECT {att} FROM '{server}_users' WHERE user = {userid}"
+        result = await database.fetch_one(query=query)
+        result = result[0]
+        if ctx.command.name == "getuserattr":
+            await ctx.send(f"{ctx.author.mention} {att} for {user.mention}: {result}")
+        await database.disconnect()
+        return result
+
+    # returns and/or says a user's current wallet balance.
+    @commands.command(aliases=["balance", "wallet", "cookiejar", "bank"])
+    async def bal(self, ctx, user: discord.Member = None):
+        if user is None:
+            user = ctx.author
+        userid = user.id
+        server = ctx.message.guild.id
+        database = Database('sqlite:///testdb.db')
+        await database.connect()
+        query = f"SELECT wallet FROM '{server}_users' WHERE user = {userid}"
+        result = await database.fetch_one(query=query)
+        result = result[0]
+        if ctx.command.name == "bal":
+            await ctx.send(f"{ctx.author.mention} {user.mention} has {result} cookies.")
+        await database.disconnect()
+        return result
+
+    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    # IMPORTANT: DO NOT LET THIS SEE THE LIGHT OF DAY. EVER. LIKE, PROBABLY DELETE IT PERIOD.
+    # LITERALLY JUST TAKES WHATEVER INPUT PROVIDED AS AN SQL QUERY AND RUNS IT WITHOUT QUESTION.
+    @commands.command()
+    async def executeraw(self, ctx):
+        database = Database('sqlite:///testdb.db')
+        await database.connect()
+        query = ctx.message.content[11:]
+        await database.execute(query=query)
+        await ctx.send("done.")
+        await database.disconnect()
+    # IMPORTANT: DELETE BEFORE PUBLISHING FINAL BUILD
+    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    # specifies a user, a value, and an attribute, sets that user's attribute to that value.
+    @commands.command()
+    async def setuserattr(self, ctx, att, value, user: discord.Member = None):
+        if user is None:
+            user = ctx.author
+        userid = user.id
+        server = ctx.message.guild.id
+        database = Database('sqlite:///testdb.db')
+        await database.connect()
+        query = f"UPDATE '{server}_users' SET {att} = {value} WHERE user = {userid}"
+        await database.execute(query=query)
+        if ctx.command.name == "setuserattr":
+            await ctx.send(f"{ctx.author.mention} {att} for {user.mention} set to {value}")
+        await database.disconnect()
+
+    # our !work command.
+    @commands.command()
+    async def play(self, ctx):
+        user = ctx.message.author
+        userid = user.id
+        server = ctx.message.guild.id
+        # currently, there is a 1 in 51 chance of getting a jackpot that drastically increases the value of the work.
+        # determine the amount to reward the player with
+        jackpot = random.randrange(0, 51)
+        if jackpot == 51:
+            jackpot = random.randrange(0, 500)
+        jackpot = jackpot + 75
+        # add the amount to the player's account
+        database = Database('sqlite:///testdb.db')
+        await database.connect()
+        query = f"SELECT wallet FROM '{server}_users' WHERE user = {userid}"
+        result = await database.fetch_one(query=query)
+        result = result[0] + jackpot
+        query = f"UPDATE '{server}_users' SET wallet = {result} WHERE user = {userid}"
+        await database.execute(query=query)
+        await database.disconnect()
+        await ctx.send(f"{user.mention} you got {jackpot} cookies!")
+
     #deprecated code, will delete soonish
     # def findguild(self, ctx, finduser=False):
     #     guild = ctx.message.guild.id
@@ -238,4 +372,4 @@ class Database(commands.Cog):
 
 
 def setup(bot):
-    bot.add_cog(Database(bot))
+    bot.add_cog(Econ(bot))
