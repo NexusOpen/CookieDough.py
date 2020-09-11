@@ -24,6 +24,7 @@ class Econ(commands.Cog):
         user INTEGER PRIMARY KEY,
         wallet INTEGER,
         inventory TEXT,
+        lastwork INTEGER
         continence
         )"""
         await database.execute(query=query)
@@ -126,8 +127,10 @@ class Econ(commands.Cog):
         query = f"SELECT wallet FROM '{server}_users' WHERE user = {userid}"
         result = await database.fetch_one(query=query)
         result = result[0]
-        if ctx.command.name == "bal":
-            await ctx.send(f"{ctx.author.mention} {user.mention} has {result} cookies.")
+        if user.id == ctx.author.id:
+            await ctx.send(f"{ctx.author.mention} you have {result}:cookie:")
+        else:
+            await ctx.send(f"{ctx.author.mention} {user.mention} has {result}:cookie:")
         await database.disconnect()
         return result
 
@@ -181,7 +184,76 @@ class Econ(commands.Cog):
         query = f"UPDATE '{server}_users' SET wallet = {result} WHERE user = {userid}"
         await database.execute(query=query)
         await database.disconnect()
-        await ctx.send(f"{user.mention} you got {jackpot} cookies!")
+        await ctx.send(f"{user.mention} you got {jackpot}:cookie:!")
+
+    @commands.command()
+    async def pay(self, ctx, user: discord.Member = None, amount=None, **args):
+        if amount is not None:
+            amount = int(amount)
+        if user is None or user.id == ctx.author.id:
+            await ctx.send(f"{ctx.author.mention}, you forgot to tell me who you're paying!")
+            return
+        if amount is None:
+            await ctx.send(f"{ctx.author.mention}, you forgot to tell me how much you want to pay them!")
+            return
+        if amount == 0:
+            await ctx.send(f"{ctx.author.mention}, you can't pay nothing! That's just silly!")
+            return
+        if amount <=0:
+            await ctx.send(f"{ctx.author.mention}, you can't pay someone {amount}! How would that even work?")
+            return
+        database = Database('sqlite:///testdb.db')
+        await database.connect()
+        # remove money from payer's wallet
+        query = f"SELECT wallet FROM '{ctx.guild.id}_users' WHERE user = {ctx.author.id}"
+        bal = await database.fetch_one(query=query)
+        bal = bal[0] - amount
+        if bal < 0:
+            await ctx.send(f"{ctx.author.mention}, you can't pay that much!")
+            await database.disconnect()
+            return
+        query = f"UPDATE '{ctx.guild.id}_users' SET wallet = {bal} WHERE user = {ctx.author.id}"
+        await database.execute(query=query)
+        # add money to payee's wallet
+        query = f"SELECT wallet FROM '{ctx.guild.id}_users' WHERE user = {user.id}"
+        bal = await database.fetch_one(query=query)
+        bal = bal[0] + amount
+        query = f"UPDATE '{ctx.guild.id}_users' SET wallet = {bal} WHERE user = {user.id}"
+        await database.execute(query=query)
+        await database.disconnect()
+        await ctx.send(f"{ctx.author.mention} paid {user.mention} {amount} cookies!")
+
+    @commands.command(aliases=["add", "addmoney"])
+    async def addcookies(self, ctx, user: discord.Member = None, amount=None, **args):
+        if amount is not None:
+            try:
+                amount = int(amount)
+            except ValueError:
+                await ctx.send(f"{ctx.author.mention} I can't give {user.mention} that!")
+                return
+        if user is None:
+            await ctx.send(f"{ctx.author.mention}, you need to tell me who gets the :cookie:!")
+            return
+        if amount is None:
+            await ctx.send(f"{ctx.author.mention}, you forgot to tell me how many :cookie: you want to give them!")
+            return
+        if amount == 0:
+            await ctx.send(f"{ctx.author.mention}, I can't give them nothing! That's just silly!")
+            return
+        if amount <= 0:
+            await ctx.send(f"{ctx.author.mention}, I can't give someone {amount}! How would that even work?")
+            return
+        database = Database('sqlite:///testdb.db')
+        await database.connect()
+        # add money to payee's wallet
+        query = f"SELECT wallet FROM '{ctx.guild.id}_users' WHERE user = {user.id}"
+        bal = await database.fetch_one(query=query)
+        bal = bal[0] + amount
+        query = f"UPDATE '{ctx.guild.id}_users' SET wallet = {bal} WHERE user = {user.id}"
+        await database.execute(query=query)
+        await database.disconnect()
+        await ctx.send(f"Gave {user.mention} {amount}:cookie:!")
+
 
     #deprecated code, will delete soonish
     # def findguild(self, ctx, finduser=False):
